@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AppBar,
@@ -28,6 +28,8 @@ import {
 import { styled, alpha } from '@mui/material/styles';
 import { AuthContext } from '../../context/AuthContext';
 import { ThemeContext } from '../../context/ThemeContext';
+import axios from 'axios';
+import { API_BASE_URL } from '../../config';
 
 // Styled components
 const SearchContainer = styled('div')(({ theme }) => ({
@@ -95,7 +97,9 @@ const Navbar = ({ toggleDarkMode, toggleSidebar }) => {
   const { user, logout } = useContext(AuthContext);
   const { darkMode } = useContext(ThemeContext);
   const navigate = useNavigate();
-  const [anchorEl, setAnchorEl] = React.useState(null);
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [searchValue, setSearchValue] = useState('');
+  const [searchTimeout, setSearchTimeout] = useState(null);
 
   const handleLogout = () => {
     logout();
@@ -103,25 +107,51 @@ const Navbar = ({ toggleDarkMode, toggleSidebar }) => {
     handleMenuClose();
   };
 
-  const handleSearch = (e) => {
-    if (e.key === 'Enter') {
-      const searchValue = e.target.value.trim();
-      if (searchValue) {
-        navigate(`/?city=${searchValue}`);
-      } else {
-        navigate('/');
-      }
+  useEffect(() => {
+    // Clear the previous timeout
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
     }
-  };
 
-  const handleSearchClick = () => {
-    const searchInput = document.querySelector('input[aria-label="search"]');
-    const searchValue = searchInput ? searchInput.value.trim() : '';
+    // Only perform search if there is a value
+    if (searchValue.trim()) {
+      const timeoutId = setTimeout(async () => {
+        try {
+          const response = await axios.get(`${API_BASE_URL}/hospitals`, {
+            params: { city: searchValue.trim() }
+          });
+          
+          // Only navigate if we're performing a search
+          if (window.location.pathname === '/') {
+            navigate('/', { 
+              state: { 
+                searchResults: response.data.data,
+                searchQuery: searchValue.trim() 
+              }
+            });
+          }
+        } catch (error) {
+          console.error('Search failed:', error);
+        }
+      }, 300); // Debounce time of 300ms
+
+      setSearchTimeout(timeoutId);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [searchValue, navigate]);
+
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchValue(value);
     
-    if (searchValue) {
-      navigate(`/?city=${searchValue}`);
-    } else {
-      navigate('/');
+    // If search is cleared and we're on home page, reset results
+    if (!value.trim() && window.location.pathname === '/') {
+      navigate('/', { 
+        state: { 
+          searchResults: null,
+          searchQuery: '' 
+        }
+      });
     }
   };
 
@@ -198,16 +228,9 @@ const Navbar = ({ toggleDarkMode, toggleSidebar }) => {
             <StyledInputBase
               placeholder="Search by city..."
               inputProps={{ 'aria-label': 'search' }}
-              onKeyPress={handleSearch}
+              value={searchValue}
+              onChange={handleSearchChange}
             />
-            <IconButton 
-              color="inherit" 
-              onClick={handleSearchClick}
-              sx={{ ml: 1 }}
-              aria-label="search button"
-            >
-              <SearchIcon />
-            </IconButton>
           </SearchContainer>
           
           {user && (

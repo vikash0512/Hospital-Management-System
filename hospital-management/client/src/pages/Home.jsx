@@ -1,49 +1,42 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Container, Typography, Box } from '@mui/material';
+import { Container, Typography, Box, CircularProgress } from '@mui/material';
 import axios from 'axios';
 import HospitalGrid from '../components/hospital/HospitalGrid';
 import UserGuide from '../components/guide/UserGuide';
 import { AuthContext } from '../context/AuthContext';
 import { API_BASE_URL } from '../config';
+import { useLocation } from 'react-router-dom';
 
 const Home = () => {
   const [hospitals, setHospitals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  
   const { user } = useContext(AuthContext);
+  const location = useLocation();
   
   useEffect(() => {
-    fetchHospitals(1);
-  }, []);
-  
-  const fetchHospitals = async (pageNum) => {
-    setLoading(true);
-    try {
-      const res = await axios.get(`${API_BASE_URL}/hospitals`, {
-        params: {
-          page: pageNum,
-          limit: 12
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // If we have search results in location state, use them
+        if (location.state?.searchResults) {
+          setHospitals(location.state.searchResults);
+        } else {
+          // Otherwise fetch all hospitals
+          const res = await axios.get(`${API_BASE_URL}/hospitals`);
+          setHospitals(res.data.data);
         }
-      });
-      
-      setHospitals(res.data.data);
-      setTotalPages(res.data.pagination.pages);
-      setPage(pageNum);
-      setError(null);
-    } catch (err) {
-      setError('Failed to fetch hospitals. Please try again later.');
-      setHospitals([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  const handlePageChange = (event, value) => {
-    fetchHospitals(value);
-  };
+        setError(null);
+      } catch (err) {
+        setError('Failed to fetch hospitals. Please try again later.');
+        setHospitals([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [location.state]);
   
   return (
     <Container maxWidth="xl">
@@ -65,23 +58,41 @@ const Home = () => {
         {/* User Guide Section - Only shown to non-logged-in users */}
         {!user && <UserGuide />}
 
-        {/* Hospitals Grid */}
-        <Typography
-          variant="h4"
-          component="h2"
-          gutterBottom
-          sx={{ mb: 3, color: '#1a237e' }}
-        >
-          Available Hospitals
-        </Typography>
+        {/* Search Results or Available Hospitals */}
+        <Box sx={{ mb: 4 }}>
+          <Typography
+            variant="h4"
+            component="h2"
+            gutterBottom
+            sx={{ color: '#1a237e' }}
+          >
+            {location.state?.searchQuery 
+              ? `Search Results for "${location.state.searchQuery}"`
+              : 'Available Hospitals'}
+          </Typography>
+          
+          <Typography
+            variant="subtitle1"
+            gutterBottom
+            sx={{ color: 'text.secondary' }}
+          >
+            {loading ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <CircularProgress size={20} />
+                <span>Searching hospitals...</span>
+              </Box>
+            ) : hospitals.length ? (
+              `Found ${hospitals.length} hospital${hospitals.length === 1 ? '' : 's'}`
+            ) : (
+              'No hospitals found. Try a different city.'
+            )}
+          </Typography>
+        </Box>
         
         <HospitalGrid
           hospitals={hospitals}
           loading={loading}
           error={error}
-          page={page}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
         />
       </Box>
     </Container>

@@ -20,12 +20,26 @@ exports.getHospitalsByCity = asyncHandler(async (req, res, next) => {
   const { city } = req.query;
 
   if (!city) {
-    return next(new ErrorResponse('Please provide a city', 400));
+    // If no city provided, return all hospitals
+    const hospitals = await Hospital.find()
+      .select('name city image speciality rating description')
+      .sort('-rating')
+      .limit(10);
+
+    return res.status(200).json({
+      success: true,
+      count: hospitals.length,
+      data: hospitals,
+    });
   }
 
-  const hospitals = await Hospital.find({ 
-    city: { $regex: new RegExp(city, 'i') } 
-  });
+  // Case-insensitive search for partial matches
+  const hospitals = await Hospital.find({
+    city: { $regex: new RegExp(city, 'i') }
+  })
+    .select('name city image speciality rating description')
+    .sort('-rating')
+    .limit(10);
 
   res.status(200).json({
     success: true,
